@@ -9,7 +9,7 @@ All logs and benchmark outputs are saved under `results/`.
 1) Download the release archive:
 
 ```bash
-wget https://github.com/AlexRyzhickov/vector-db-benchmark/releases/download/v0.1.1/vector-db-benchmark-unknown-linux-gnu.tar.gz
+wget https://github.com/AlexRyzhickov/vector-db-benchmark/releases/download/v0.1.2/vector-db-benchmark-unknown-linux-gnu.tar.gz
 ```
 
 2) Extract:
