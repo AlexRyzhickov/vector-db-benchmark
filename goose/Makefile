@@ -5,9 +5,9 @@ CARGO_TARGET_DIR := $(HERE)/target
 TARGET_DIR := $(CARGO_TARGET_DIR)/release
 
 HOST ?= http://localhost:7222
+CASPER_COLLECTION ?= test_collection
 POOL_SIZE ?= 100000
 SEARCH_LIMIT ?= 10
-SEARCH_PATH ?= /collection/test_collection/search
 BENCH_SLEEP ?= 15
 OUTPUT_FORMAT ?= bin
 
@@ -33,7 +33,7 @@ run-bin: $(HERE)/$(BIN)
 		POOL_PATH=$(BIN_POOL_PATH) \
 		POOL_SIZE=$(POOL_SIZE) \
 		SEARCH_LIMIT=$(SEARCH_LIMIT) \
-		SEARCH_PATH=$(SEARCH_PATH) \
+		CASPER_COLLECTION=$(CASPER_COLLECTION) \
 		OUTPUT_FORMAT=$(OUTPUT_FORMAT) \
 		$(HERE)/$(BIN) --host $(HOST)
 
@@ -42,7 +42,7 @@ run-hdf5: $(HERE)/$(BIN)
 		POOL_PATH=$(HDF5_POOL_PATH) \
 		POOL_SIZE=$(POOL_SIZE) \
 		SEARCH_LIMIT=$(SEARCH_LIMIT) \
-		SEARCH_PATH=$(SEARCH_PATH) \
+		CASPER_COLLECTION=$(CASPER_COLLECTION) \
 		OUTPUT_FORMAT=$(OUTPUT_FORMAT) \
 		$(HERE)/$(BIN) --host $(HOST)
 
@@ -67,14 +67,12 @@ bench-hdf5: $(HERE)/$(BIN)
 
 # Same as run-hdf5 but targets a Qdrant instance via the official qdrant-client (gRPC).
 # Requires QDRANT_COLLECTION and HNSW_EF; QDRANT_URL points at Qdrant's gRPC port (6334).
-# SEARCH_PATH is unused on this code path; we pass a dummy value to satisfy the binary's env validation.
 run-hdf5-qdrant: $(HERE)/$(BIN)
 	BACKEND=qdrant \
 		POOL_SOURCE=hdf5 \
 		POOL_PATH=$(HDF5_POOL_PATH) \
 		POOL_SIZE=$(POOL_SIZE) \
 		SEARCH_LIMIT=$(SEARCH_LIMIT) \
-		SEARCH_PATH=/unused \
 		OUTPUT_FORMAT=$(OUTPUT_FORMAT) \
 		HNSW_EF=$(HNSW_EF) \
 		QDRANT_URL=$(QDRANT_URL) \

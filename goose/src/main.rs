@@ -45,7 +45,6 @@ struct RunConfig {
     users: usize,
     run_time_seconds: usize,
     search_limit: usize,
-    search_path: String,
     output_format: String,
     backend: String,
     ef_search: Option<usize>,
@@ -56,24 +55,11 @@ struct RunConfig {
     casper_collection: String,
 }
 
-fn parse_casper_collection_from_search_path(search_path: &str) -> String {
-    let trimmed = search_path.trim_start_matches('/');
-    let mut parts = trimmed.split('/');
-    match (parts.next(), parts.next()) {
-        (Some("collection"), Some(name)) if !name.is_empty() => name.to_string(),
-        _ => String::new(),
-    }
-}
-
 fn read_env_usize_or_default(name: &str, default: usize) -> usize {
     env::var(name).ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(default)
 }
 
 fn read_run_config() -> Result<RunConfig, String> {
-    let search_path = env::var("SEARCH_PATH").map_err(|_| "SEARCH_PATH is required".to_string())?;
-    if search_path.is_empty() {
-        return Err("SEARCH_PATH must not be empty".to_string());
-    }
     let output_format = env::var("OUTPUT_FORMAT").unwrap_or_else(|_| DEFAULT_OUTPUT_FORMAT.to_string());
     if !ALLOWED_OUTPUT_FORMATS.contains(&output_format.as_str()) {
         return Err(format!(
@@ -103,12 +89,9 @@ fn read_run_config() -> Result<RunConfig, String> {
         Ok(v) => v.parse::<u16>().map_err(|_| "invalid CASPER_HTTP_PORT, expected u16".to_string())?,
         Err(_) => 7222,
     };
-    let casper_collection = match env::var("CASPER_COLLECTION") {
-        Ok(v) if !v.is_empty() => v,
-        _ => parse_casper_collection_from_search_path(&search_path),
-    };
+    let casper_collection = env::var("CASPER_COLLECTION").unwrap_or_default();
     if backend == "casper" && casper_collection.is_empty() {
-        return Err("Could not resolve Casper collection name. Set CASPER_COLLECTION or a SEARCH_PATH like /collection/<name>/search".to_string());
+        return Err("CASPER_COLLECTION is required when BACKEND=casper".to_string());
     }
 
     Ok(RunConfig {
@@ -116,7 +99,6 @@ fn read_run_config() -> Result<RunConfig, String> {
         users: read_env_usize_or_default("USERS", DEFAULT_USERS),
         run_time_seconds: read_env_usize_or_default("RUN_TIME_SECONDS", DEFAULT_RUN_TIME_SECONDS),
         search_limit: read_env_usize_or_default("SEARCH_LIMIT", DEFAULT_SEARCH_LIMIT),
-        search_path,
         output_format,
         backend,
         ef_search,
@@ -353,7 +335,7 @@ async fn run_load_test() -> Result<(), GooseError> {
 #[tokio::main]
 async fn main() -> Result<(), GooseError> {
     let cfg = read_run_config().map_err(|detail| GooseError::InvalidOption {
-        option: "SEARCH_PATH".to_string(),
+        option: "CASPER_COLLECTION".to_string(),
         value: "".to_string(),
         detail,
     })?;
@@ -402,13 +384,12 @@ async fn main() -> Result<(), GooseError> {
 
     let cfg = run_config();
     eprintln!(
-        "Run config: backend={}, user_start_offset={}, users={}, run_time_seconds={}, search_limit={}, search_path={}, output_format={}, hnsw_ef={:?}, qdrant_url={}, qdrant_collection={}, casper_host={}, casper_http_port={}, casper_collection={}",
+        "Run config: backend={}, user_start_offset={}, users={}, run_time_seconds={}, search_limit={}, output_format={}, hnsw_ef={:?}, qdrant_url={}, qdrant_collection={}, casper_host={}, casper_http_port={}, casper_collection={}",
         cfg.backend,
         cfg.user_start_offset,
         cfg.users,
         cfg.run_time_seconds,
         cfg.search_limit,
-        cfg.search_path,
         cfg.output_format,
         cfg.ef_search,
         cfg.qdrant_url,
