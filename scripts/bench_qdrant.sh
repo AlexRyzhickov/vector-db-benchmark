@@ -162,7 +162,6 @@ run_goose() {
     POOL_SIZE=100000 \
     POOL_DATASET=train \
     SEARCH_LIMIT="$k" \
-    SEARCH_PATH=/unused \
     OUTPUT_FORMAT=bin \
     HNSW_EF="$k" \
     QDRANT_URL="$GRPC_URL" \

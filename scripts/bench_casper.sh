@@ -136,7 +136,7 @@ run_goose() {
     POOL_SIZE=100000 \
     POOL_DATASET=train \
     SEARCH_LIMIT="$k" \
-    SEARCH_PATH="/collection/$COLLECTION/search" \
+    CASPER_COLLECTION="$COLLECTION" \
     OUTPUT_FORMAT=bin \
     USERS="$USERS" \
     RUN_TIME_SECONDS="$RUN_TIME_SECONDS" \
