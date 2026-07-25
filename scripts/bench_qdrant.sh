@@ -168,8 +168,6 @@ run_goose() {
     QDRANT_COLLECTION="$COLLECTION" \
     USERS="$USERS" \
     RUN_TIME_SECONDS="$RUN_TIME_SECONDS" \
-#      timeout --kill-after=10 "$((RUN_TIME_SECONDS + 60))" \
-#      stdbuf -oL -eL \
       "${NUMA_LOAD[@]}" "$GOOSE_BIN" --host "$GRPC_URL" --hatch-rate "$USERS" \
       2>&1 | tee "$out_file" || true
   done
