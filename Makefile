@@ -28,6 +28,7 @@ HDF5_URL ?= http://ann-benchmarks.com/deep-image-96-angular.hdf5
 USERS ?= 32
 RUN_TIME_SECONDS ?= 90
 SEARCH_LIMITS ?= 10 100 1000 10000 100000
+EF_SEARCH ?= 10 100 1000 10000 100000
 
 # Optional NUMA pinning for multi-socket boxes. Empty = no pinning. Example
 # for a 2-socket EPYC: SERVER_NUMA_NODE=1 LOAD_NUMA_NODE=0 (server on
@@ -56,6 +57,7 @@ help:
 	@echo "  USERS=$(USERS)"
 	@echo "  RUN_TIME_SECONDS=$(RUN_TIME_SECONDS)"
 	@echo "  SEARCH_LIMITS=$(SEARCH_LIMITS)"
+	@echo "  EF_SEARCH=$(EF_SEARCH)"
 	@echo "  SERVER_NUMA_NODE=$(SERVER_NUMA_NODE)  (empty = no pinning)"
 	@echo "  LOAD_NUMA_NODE=$(LOAD_NUMA_NODE)    (empty = no pinning)"
 	@echo "  CASPER_VERSION=$(CASPER_VERSION)"
@@ -110,6 +112,7 @@ bench-casper:
 	@HDF5=$(HDF5) RESULTS_DIR=$(RESULTS_DIR) API_TOKEN=$(API_TOKEN) \
 	 USERS=$(USERS) RUN_TIME_SECONDS=$(RUN_TIME_SECONDS) \
 	 SEARCH_LIMITS="$(SEARCH_LIMITS)" \
+	 EF_SEARCH="$(EF_SEARCH)" \
 	 SERVER_NUMA_NODE="$(SERVER_NUMA_NODE)" \
 	 LOAD_NUMA_NODE="$(LOAD_NUMA_NODE)" \
 	 ./scripts/bench_casper.sh
@@ -118,6 +121,7 @@ bench-qdrant:
 	@HDF5=$(HDF5) RESULTS_DIR=$(RESULTS_DIR) \
 	 USERS=$(USERS) RUN_TIME_SECONDS=$(RUN_TIME_SECONDS) \
 	 SEARCH_LIMITS="$(SEARCH_LIMITS)" \
+	 EF_SEARCH="$(EF_SEARCH)" \
 	 SERVER_NUMA_NODE="$(SERVER_NUMA_NODE)" \
 	 LOAD_NUMA_NODE="$(LOAD_NUMA_NODE)" \
 	 ./scripts/bench_qdrant.sh
