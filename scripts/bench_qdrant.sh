@@ -23,6 +23,7 @@ RESULTS_DIR="${RESULTS_DIR:-$PERF_DIR/results}"
 USERS="${USERS:-32}"
 RUN_TIME_SECONDS="${RUN_TIME_SECONDS:-90}"
 SEARCH_LIMITS="${SEARCH_LIMITS:-10 100 1000}"
+EF_SEARCH="${EF_SEARCH:-10 100 1000}"
 # Pause after index build so CPU temperature settles before load test
 COOLDOWN_SECONDS="${COOLDOWN_SECONDS:-60}"
 # NUMA pinning: pin Qdrant + import to one socket and goose to the other so
@@ -152,10 +153,22 @@ import_data() {
 run_goose() {
   local variant="$1"
   local out_dir="$RESULTS_DIR/qdrant/$variant"
+  local limits=()
+  local ef_values=()
   mkdir -p "$out_dir"
-  for k in $SEARCH_LIMITS; do
+  read -ra limits <<< "$SEARCH_LIMITS"
+  read -ra ef_values <<< "$EF_SEARCH"
+  if [[ ${#limits[@]} -ne ${#ef_values[@]} ]]; then
+    echo "ERROR: SEARCH_LIMITS and EF_SEARCH must have the same number of values" >&2
+    echo "  SEARCH_LIMITS='$SEARCH_LIMITS'" >&2
+    echo "  EF_SEARCH='$EF_SEARCH'" >&2
+    exit 1
+  fi
+  for i in "${!limits[@]}"; do
+    local k="${limits[$i]}"
+    local ef="${ef_values[$i]}"
     local out_file="$out_dir/k=${k}.log"
-    log "Goose run: variant=$variant k=$k users=$USERS run_time=${RUN_TIME_SECONDS}s"
+    log "Goose run: variant=$variant k=$k ef_search=$ef users=$USERS run_time=${RUN_TIME_SECONDS}s"
     BACKEND=qdrant \
     POOL_SOURCE=hdf5 \
     POOL_PATH="$HDF5" \
@@ -163,7 +176,7 @@ run_goose() {
     POOL_DATASET=train \
     SEARCH_LIMIT="$k" \
     OUTPUT_FORMAT=bin \
-    HNSW_EF="$k" \
+    HNSW_EF="$ef" \
     QDRANT_URL="$GRPC_URL" \
     QDRANT_COLLECTION="$COLLECTION" \
     USERS="$USERS" \
