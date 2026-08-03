@@ -36,6 +36,10 @@ COLLECTION="deep-image-96-noindex"
 BASE_URL="http://localhost:6333"
 GRPC_URL="http://localhost:6334"
 IMPORT_BATCH_SIZE="${IMPORT_BATCH_SIZE:-512}"
+# Add optimizers_config only when this flag is enabled.
+USE_OPTIMIZERS_CONFIG="${QDRANT_USE_OPTIMIZERS_CONFIG:-false}"
+# Target number of segments for optimizers_config.default_segment_number.
+DEFAULT_SEGMENT_NUMBER="${QDRANT_DEFAULT_SEGMENT_NUMBER:-1}"
 
 QDRANT_DIR="$PERF_DIR/qdrant"
 QDRANT_BIN="$QDRANT_DIR/qdrant"
@@ -55,6 +59,16 @@ trap cleanup EXIT INT TERM
 [[ -x "$IMPORT_BIN" ]] || { echo "ERROR: missing executable $IMPORT_BIN" >&2; exit 1; }
 [[ -x "$GOOSE_BIN"  ]] || { echo "ERROR: missing executable $GOOSE_BIN"  >&2; exit 1; }
 [[ -f "$HDF5"       ]] || { echo "ERROR: HDF5 dataset not found at $HDF5" >&2; exit 1; }
+if [[ "$USE_OPTIMIZERS_CONFIG" != "true" && "$USE_OPTIMIZERS_CONFIG" != "false" ]]; then
+  echo "ERROR: USE_OPTIMIZERS_CONFIG must be 'true' or 'false', got '$USE_OPTIMIZERS_CONFIG'" >&2
+  exit 1
+fi
+if [[ "$USE_OPTIMIZERS_CONFIG" == "true" ]]; then
+  if ! [[ "$DEFAULT_SEGMENT_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: DEFAULT_SEGMENT_NUMBER must be a positive integer, got '$DEFAULT_SEGMENT_NUMBER'" >&2
+    exit 1
+  fi
+fi
 
 # Resolve NUMA prefixes once. Arrays so the empty case = no prefix.
 read -ra NUMA_SERVER < <(numa_prefix "$SERVER_NUMA_NODE")
@@ -84,10 +98,24 @@ wait_for_http "$BASE_URL/readyz" "Qdrant HTTP" 60 || \
   wait_for_http "$BASE_URL/"      "Qdrant HTTP" 60
 
 # --- 3. per-variant runs ----------------------------------------------------
+build_optimizers_config_block() {
+  if [[ "$USE_OPTIMIZERS_CONFIG" != "true" ]]; then
+    return 0
+  fi
+  cat <<EOF
+,
+  "optimizers_config": {
+    "default_segment_number": $DEFAULT_SEGMENT_NUMBER
+  }
+EOF
+}
+
 create_collection_no_quant() {
   log "Creating Qdrant collection '$COLLECTION' (no quantization)"
   local body
-  body=$(cat <<'EOF'
+  local optimizers_config_block
+  optimizers_config_block="$(build_optimizers_config_block)"
+  body=$(cat <<EOF
 {
   "vectors": { "size": 96, "distance": "Dot" },
   "hnsw_config": {
@@ -96,7 +124,7 @@ create_collection_no_quant() {
     "full_scan_threshold": 10000,
     "max_indexing_threads": 0,
     "on_disk": false
-  }
+  }$optimizers_config_block
 }
 EOF
 )
@@ -107,7 +135,9 @@ EOF
 create_collection_i8() {
   log "Creating Qdrant collection '$COLLECTION' (int8 scalar quantization)"
   local body
-  body=$(cat <<'EOF'
+  local optimizers_config_block
+  optimizers_config_block="$(build_optimizers_config_block)"
+  body=$(cat <<EOF
 {
   "vectors": { "size": 96, "distance": "Dot" },
   "hnsw_config": {
@@ -123,7 +153,7 @@ create_collection_i8() {
       "quantile": 0.99,
       "always_ram": true
     }
-  }
+  }$optimizers_config_block
 }
 EOF
 )
