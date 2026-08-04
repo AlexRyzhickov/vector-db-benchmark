@@ -30,6 +30,10 @@ RUN_TIME_SECONDS ?= 90
 SEARCH_LIMITS ?= 10 100 1000 10000 100000
 EF_SEARCH ?= 10 100 1000 10000 100000
 
+# Qdrant collection optimizers config knobs.
+QDRANT_USE_OPTIMIZERS_CONFIG ?= false
+QDRANT_DEFAULT_SEGMENT_NUMBER ?= 1
+
 # Optional NUMA pinning for multi-socket boxes. Empty = no pinning. Example
 # for a 2-socket EPYC: SERVER_NUMA_NODE=1 LOAD_NUMA_NODE=0 (server on
 # socket 1, goose+import on socket 0 so the generator doesn't steal CPU
@@ -58,6 +62,8 @@ help:
 	@echo "  RUN_TIME_SECONDS=$(RUN_TIME_SECONDS)"
 	@echo "  SEARCH_LIMITS=$(SEARCH_LIMITS)"
 	@echo "  EF_SEARCH=$(EF_SEARCH)"
+	@echo "  QDRANT_USE_OPTIMIZERS_CONFIG=$(QDRANT_USE_OPTIMIZERS_CONFIG)"
+	@echo "  QDRANT_DEFAULT_SEGMENT_NUMBER=$(QDRANT_DEFAULT_SEGMENT_NUMBER)"
 	@echo "  SERVER_NUMA_NODE=$(SERVER_NUMA_NODE)  (empty = no pinning)"
 	@echo "  LOAD_NUMA_NODE=$(LOAD_NUMA_NODE)    (empty = no pinning)"
 	@echo "  CASPER_VERSION=$(CASPER_VERSION)"
@@ -124,6 +130,8 @@ bench-qdrant:
 	 EF_SEARCH="$(EF_SEARCH)" \
 	 SERVER_NUMA_NODE="$(SERVER_NUMA_NODE)" \
 	 LOAD_NUMA_NODE="$(LOAD_NUMA_NODE)" \
+	 QDRANT_USE_OPTIMIZERS_CONFIG="$(QDRANT_USE_OPTIMIZERS_CONFIG)" \
+	 QDRANT_DEFAULT_SEGMENT_NUMBER="$(QDRANT_DEFAULT_SEGMENT_NUMBER)" \
 	 ./scripts/bench_qdrant.sh
 
 clean:
