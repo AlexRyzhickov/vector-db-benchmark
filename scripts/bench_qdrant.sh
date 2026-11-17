@@ -5,7 +5,7 @@
 #   3. For each variant { no-quant, i8 }:
 #        - PUT /collections/<name> with the right config, load HDF5 via
 #          ./import/import (HTTP backend), wait until status=green.
-#        - For each k in $SEARCH_LIMITS run ./goose/goose-load-test (Qdrant
+#        - For each k in $SEARCH_LIMITS run ./goose/goose (Qdrant
 #          backend, gRPC) and save its output to
 #          results/qdrant/<variant>/k=<k>.log.
 #        - DELETE the collection between variants so the next round starts
@@ -32,8 +32,8 @@ COOLDOWN_SECONDS="${COOLDOWN_SECONDS:-60}"
 SERVER_NUMA_NODE="${SERVER_NUMA_NODE:-}"
 LOAD_NUMA_NODE="${LOAD_NUMA_NODE:-}"
 
-COLLECTION="deep-image-96-noindex"
-BASE_URL="http://localhost:6333"
+QDRANT_COLLECTION="test_collection"
+QDRANT_BASE_URL="http://localhost:6333"
 GRPC_URL="http://localhost:6334"
 IMPORT_BATCH_SIZE="${IMPORT_BATCH_SIZE:-512}"
 # Add optimizers_config only when this flag is enabled.
@@ -44,7 +44,7 @@ DEFAULT_SEGMENT_NUMBER="${QDRANT_DEFAULT_SEGMENT_NUMBER:-1}"
 QDRANT_DIR="$PERF_DIR/qdrant"
 QDRANT_BIN="$QDRANT_DIR/qdrant"
 IMPORT_BIN="$PERF_DIR/import/import"
-GOOSE_BIN="$PERF_DIR/goose/goose-load-test"
+GOOSE_BIN="$PERF_DIR/goose/goose"
 
 QDRANT_PID=""
 LOGS_DIR="$RESULTS_DIR/qdrant/logs"
@@ -94,8 +94,8 @@ QDRANT_PID="$(cat "$LOGS_DIR/qdrant.pid")"
 log "Qdrant pid=$QDRANT_PID"
 
 # Qdrant's root returns version info on HTTP 200 once it's accepting connections.
-wait_for_http "$BASE_URL/readyz" "Qdrant HTTP" 60 || \
-  wait_for_http "$BASE_URL/"      "Qdrant HTTP" 60
+wait_for_http "$QDRANT_BASE_URL/readyz" "Qdrant HTTP" 60 || \
+  wait_for_http "$QDRANT_BASE_URL/"      "Qdrant HTTP" 60
 
 # --- 3. per-variant runs ----------------------------------------------------
 build_optimizers_config_block() {
@@ -111,7 +111,7 @@ EOF
 }
 
 create_collection_no_quant() {
-  log "Creating Qdrant collection '$COLLECTION' (no quantization)"
+  log "Creating Qdrant collection '$QDRANT_COLLECTION' (no quantization)"
   local body
   local optimizers_config_block
   optimizers_config_block="$(build_optimizers_config_block)"
@@ -129,11 +129,11 @@ create_collection_no_quant() {
 EOF
 )
   curl -fsS -X PUT -H 'Content-Type: application/json' \
-    -d "$body" "$BASE_URL/collections/$COLLECTION" >/dev/null
+    -d "$body" "$QDRANT_BASE_URL/collections/$QDRANT_COLLECTION" >/dev/null
 }
 
 create_collection_i8() {
-  log "Creating Qdrant collection '$COLLECTION' (int8 scalar quantization)"
+  log "Creating Qdrant collection '$QDRANT_COLLECTION' (int8 scalar quantization)"
   local body
   local optimizers_config_block
   optimizers_config_block="$(build_optimizers_config_block)"
@@ -158,13 +158,13 @@ create_collection_i8() {
 EOF
 )
   curl -fsS -X PUT -H 'Content-Type: application/json' \
-    -d "$body" "$BASE_URL/collections/$COLLECTION" >/dev/null
+    -d "$body" "$QDRANT_BASE_URL/collections/$QDRANT_COLLECTION" >/dev/null
 }
 
 delete_collection() {
-  log "Deleting Qdrant collection '$COLLECTION'"
+  log "Deleting Qdrant collection '$QDRANT_COLLECTION'"
   curl -fsS -X DELETE -H 'Content-Type: application/json' \
-    "$BASE_URL/collections/$COLLECTION" >/dev/null || true
+    "$QDRANT_BASE_URL/collections/$QDRANT_COLLECTION" >/dev/null || true
 }
 
 import_data() {
@@ -173,8 +173,8 @@ import_data() {
     --format hdf5 \
     --dataset train \
     --backend qdrant \
-    --base-url "$BASE_URL" \
-    --collection "$COLLECTION" \
+    --base-url "$QDRANT_BASE_URL" \
+    --collection "$QDRANT_COLLECTION" \
     --batch-size "$IMPORT_BATCH_SIZE" \
     --quiet \
     | tee "$LOGS_DIR/import.log"
@@ -208,7 +208,7 @@ run_goose() {
     OUTPUT_FORMAT=bin \
     HNSW_EF="$ef" \
     QDRANT_URL="$GRPC_URL" \
-    QDRANT_COLLECTION="$COLLECTION" \
+    QDRANT_COLLECTION="$QDRANT_COLLECTION" \
     USERS="$USERS" \
     RUN_TIME_SECONDS="$RUN_TIME_SECONDS" \
       "${NUMA_LOAD[@]}" "$GOOSE_BIN" --host "$GRPC_URL" --hatch-rate "$USERS" \
@@ -219,7 +219,7 @@ run_goose() {
 # Variant 1: no quantization
 create_collection_no_quant
 import_data
-wait_for_qdrant_green "$BASE_URL" "$COLLECTION"
+wait_for_qdrant_green "$QDRANT_BASE_URL" "$QDRANT_COLLECTION"
 log "Cooldown ${COOLDOWN_SECONDS}s — letting CPU settle after index build"
 sleep "$COOLDOWN_SECONDS"
 run_goose "no-quant"
@@ -228,7 +228,7 @@ run_goose "no-quant"
 delete_collection
 create_collection_i8
 import_data
-wait_for_qdrant_green "$BASE_URL" "$COLLECTION"
+wait_for_qdrant_green "$QDRANT_BASE_URL" "$QDRANT_COLLECTION"
 log "Cooldown ${COOLDOWN_SECONDS}s — letting CPU settle after index build"
 sleep "$COOLDOWN_SECONDS"
 run_goose "i8"

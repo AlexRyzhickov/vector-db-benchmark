@@ -1,6 +1,6 @@
 # Vector DB Benchmark
 
-This repository is a high-load benchmark harness for Casper and Qdrant. Compared versions: Casper `v0.1.0` vs Qdrant `v1.17.0`. The load-testing layer in this project is built on top of the [Goose](https://github.com/tag1consulting/goose) library.
+This repository is a high-load benchmark harness for Casper and Qdrant. Compared versions: Casper `v0.2.0` vs Qdrant `v1.20.2`. The load-testing layer in this project is built on top of the [Goose](https://github.com/tag1consulting/goose) library.
 
 All logs and benchmark outputs are saved under `results/`.
 
@@ -107,6 +107,8 @@ make bench-casper \
 ## Prerequisites
 
 - Bash, `curl`, `make`
-- Optional: Rust toolchain (`cargo`) (only needed to build helper binaries from source)
+- Rust toolchain via rustup, Docker and [`cross`](https://github.com/cross-rs/cross) — when running from a git clone; not needed with the release archive
+
+Binaries are not stored in git. When running from a git clone, `make bench-*` downloads the Casper/Qdrant release binaries and cross-compiles `import`/`goose` for `x86_64-unknown-linux-gnu` on first use. To refresh them (e.g. after changing `CASPER_VERSION`/`QDRANT_VERSION` or the Rust sources), run `make download-binaries` / `make build-tools-linux-x86`. `make package-linux-x86` builds the release archive and works on any host, including macOS.
 - Optional: `numactl` (for NUMA pinning)
 - Dataset file (default): `deep-image-96-angular.hdf5` in this directory

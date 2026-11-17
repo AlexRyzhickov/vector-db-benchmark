@@ -38,29 +38,29 @@ wait_for_http() {
 }
 
 # --- Casper index readiness -------------------------------------------------
-# Poll Casper /search with a dummy 96-d zero vector until it returns 200.
-# Index creation is async (202 Accepted from POST /index); search fails until
-# the HNSW build finishes.
+# Poll GET /collections/{name} until index.state is "ready". Index build is
+# async (202 Accepted from POST /index/start); "not_started" after a start
+# means the build failed.
 wait_for_casper_index() {
   local base_url="$1"
   local collection="$2"
   local timeout="${3:-1800}"  # up to 30 min for 9.9M points
 
-  local payload='{"vector":['
+  local url="${base_url}/collections/${collection}"
+  local ready_re='"state"[[:space:]]*:[[:space:]]*"ready"'
+  local failed_re='"state"[[:space:]]*:[[:space:]]*"not_started"'
   local i
-  for ((i = 0; i < 96; i++)); do
-    payload+='0.0'
-    if ((i < 95)); then payload+=','; fi
-  done
-  payload+=']}'
-
-  local url="${base_url}/collection/${collection}/search?limit=1"
-  log "Waiting for Casper index to be searchable (timeout ${timeout}s)…"
+  log "Waiting for Casper index to be ready (timeout ${timeout}s)…"
   for ((i = 0; i < timeout; i += 2)); do
-    if curl -fsS -X POST -H 'Content-Type: application/json' \
-        -d "$payload" "$url" >/dev/null 2>&1; then
+    local body
+    body="$(curl -fsS "$url" 2>/dev/null || true)"
+    if [[ "$body" =~ $ready_re ]]; then
       log "Casper index ready after ~${i}s"
       return 0
+    fi
+    if [[ "$body" =~ $failed_re ]]; then
+      echo "ERROR: Casper index build failed (index.state=not_started)" >&2
+      return 1
     fi
     sleep 2
   done

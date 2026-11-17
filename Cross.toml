@@ -1,0 +1,9 @@
+# The image `cross` builds the Linux bench tools (import, goose) in, pinned by
+# digest — the same one Casper's release uses. Without this `cross` takes
+# `ghcr.io/cross-rs/<target>:main`, a tag that moves, and with it the gcc that
+# compiles HDF5 (hdf5-sys, `static`) and the glibc the binaries link against.
+# To move to a newer one, replace the digest —
+# `docker buildx imagetools inspect ghcr.io/cross-rs/<target>:main`.
+
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu@sha256:8859395961030cc16506872272a547dce07126daf69007d492cb28217d37cd28"

@@ -8,3 +8,10 @@ import/target/
 
 *.hdf5
 *.tar.gz
+
+# Binaries are downloaded / built on demand (see Makefile), not stored in git.
+/casper/casper
+/qdrant/qdrant
+/goose/goose
+/import/import
+/.tools/
