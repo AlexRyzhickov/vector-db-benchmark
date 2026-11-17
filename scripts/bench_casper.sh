@@ -2,13 +2,14 @@
 # End-to-end Casper bench:
 #   1. Wipe ./casper/ except the binary itself.
 #   2. Start ./casper/casper (HTTP 7222, gRPC 7223 — defaults).
-#   3. Create collection, import HDF5 via ./import/import.
-#   4. For each quantization { f32, i8 }:
-#        - DELETE existing index (if any), POST /index with the quantization,
-#          wait until the index is searchable.
-#        - For each k in $SEARCH_LIMITS run ./goose/goose-load-test and save
+#   3. For each quantization { f32, i8 }:
+#        - DELETE the collection (if any) and create it with the index schema
+#          for that quantization (the schema is fixed at creation).
+#        - Import HDF5 via ./import/import, POST /index/start, wait until
+#          index.state is ready.
+#        - For each k in $SEARCH_LIMITS run ./goose/goose and save
 #          its output to results/casper/<quant>/k=<k>.log.
-#   5. Stop Casper.
+#   4. Stop Casper.
 
 set -euo pipefail
 
@@ -30,15 +31,15 @@ COOLDOWN_SECONDS="${COOLDOWN_SECONDS:-60}"
 SERVER_NUMA_NODE="${SERVER_NUMA_NODE:-}"
 LOAD_NUMA_NODE="${LOAD_NUMA_NODE:-}"
 
-COLLECTION="test_collection"
+CASPER_COLLECTION="test_collection"
 DIM=96
 MAX_SIZE=10000000
-BASE_URL="http://localhost:7222"
+CASPER_BASE_URL="http://localhost:7222"
 
 CASPER_DIR="$PERF_DIR/casper"
 CASPER_BIN="$CASPER_DIR/casper"
 IMPORT_BIN="$PERF_DIR/import/import"
-GOOSE_BIN="$PERF_DIR/goose/goose-load-test"
+GOOSE_BIN="$PERF_DIR/goose/goose"
 
 CASPER_PID=""
 LOGS_DIR="$RESULTS_DIR/casper/logs"
@@ -53,7 +54,7 @@ trap cleanup EXIT INT TERM
 [[ -x "$IMPORT_BIN" ]] || { echo "ERROR: missing executable $IMPORT_BIN" >&2; exit 1; }
 [[ -x "$GOOSE_BIN"  ]] || { echo "ERROR: missing executable $GOOSE_BIN"  >&2; exit 1; }
 [[ -f "$HDF5"       ]] || { echo "ERROR: HDF5 dataset not found at $HDF5" >&2; exit 1; }
-: "${API_TOKEN:?ERROR: API_TOKEN env var is required}"
+: "${LICENSE_TOKEN:?ERROR: LICENSE_TOKEN env var is required}"
 
 # Resolve NUMA prefixes once. Arrays so the empty case = no prefix.
 read -ra NUMA_SERVER < <(numa_prefix "$SERVER_NUMA_NODE")
@@ -71,7 +72,7 @@ mkdir -p "$LOGS_DIR"
 log "Starting Casper from $CASPER_DIR"
 (
   cd "$CASPER_DIR"
-  API_TOKEN="$API_TOKEN" RUST_LOG="${RUST_LOG:-info}" \
+  LICENSE_TOKEN="$LICENSE_TOKEN" RUST_LOG="${RUST_LOG:-info}" \
     "${NUMA_SERVER[@]}" ./casper \
       >"$LOGS_DIR/casper.stdout" 2>"$LOGS_DIR/casper.stderr" &
   echo $! >"$LOGS_DIR/casper.pid"
@@ -79,50 +80,60 @@ log "Starting Casper from $CASPER_DIR"
 CASPER_PID="$(cat "$LOGS_DIR/casper.pid")"
 log "Casper pid=$CASPER_PID"
 
-wait_for_http "$BASE_URL/health" "Casper HTTP" 60
+wait_for_http "$CASPER_BASE_URL/health" "Casper HTTP" 60
 
-# --- 3. create collection + load data --------------------------------------
-log "Creating collection '$COLLECTION' (dim=$DIM, max_size=$MAX_SIZE)"
-curl -fsS -X POST -H 'Content-Type: application/json' \
-  "$BASE_URL/collection/$COLLECTION?dim=$DIM&max_size=$MAX_SIZE" >/dev/null
-
-log "Importing HDF5 dataset into Casper (this may take a while)"
-"${NUMA_LOAD[@]}" "$IMPORT_BIN" "$HDF5" \
-  --format hdf5 \
-  --dataset train \
-  --base-url "$BASE_URL" \
-  --collection "$COLLECTION" \
-  --quiet \
-  | tee "$LOGS_DIR/import.log"
-
-# --- 4. per-quantization runs ----------------------------------------------
-create_index() {
+# --- 3. per-quantization runs ----------------------------------------------
+# The index schema (incl. quantization) is fixed when the collection is
+# created, so each quantization gets a fresh collection and its own import.
+create_collection() {
   local quant="$1"
   local body
   body=$(cat <<EOF
 {
-  "hnsw": {
-    "metric": "inner-product",
-    "quantization": "$quant",
-    "m": 16,
-    "m0": 32,
-    "ef_construction": 200
-  },
-  "normalization": true
+  "dim": $DIM,
+  "max_size": $MAX_SIZE,
+  "index": {
+    "hnsw": {
+      "metric": "inner-product",
+      "quantization": "$quant",
+      "m": 16,
+      "m0": 32,
+      "ef_construction": 200
+    },
+    "normalization": true
+  }
 }
 EOF
 )
-  log "Creating $quant index"
+  log "Creating collection '$CASPER_COLLECTION' (dim=$DIM, max_size=$MAX_SIZE, quant=$quant)"
   curl -fsS -X POST -H 'Content-Type: application/json' \
-    -d "$body" "$BASE_URL/collection/$COLLECTION/index" >/dev/null
-  wait_for_casper_index "$BASE_URL" "$COLLECTION"
-  log "Cooldown ${COOLDOWN_SECONDS}s — letting CPU settle after index build"
-  sleep "$COOLDOWN_SECONDS"
+    -d "$body" "$CASPER_BASE_URL/collection/$CASPER_COLLECTION" >/dev/null
 }
 
-delete_index() {
-  log "Deleting existing index (if any)"
-  curl -fsS -X DELETE "$BASE_URL/collection/$COLLECTION/index" >/dev/null || true
+delete_collection() {
+  log "Deleting existing collection (if any)"
+  curl -fsS -X DELETE "$CASPER_BASE_URL/collection/$CASPER_COLLECTION" >/dev/null || true
+}
+
+import_data() {
+  local quant="$1"
+  log "Importing HDF5 dataset into Casper (this may take a while)"
+  "${NUMA_LOAD[@]}" "$IMPORT_BIN" "$HDF5" \
+    --format hdf5 \
+    --dataset train \
+    --base-url "$CASPER_BASE_URL" \
+    --collection "$CASPER_COLLECTION" \
+    --quiet \
+    | tee "$LOGS_DIR/import-$quant.log"
+}
+
+build_index() {
+  local quant="$1"
+  log "Starting $quant index build"
+  curl -fsS -X POST "$CASPER_BASE_URL/collection/$CASPER_COLLECTION/index/start" >/dev/null
+  wait_for_casper_index "$CASPER_BASE_URL" "$CASPER_COLLECTION"
+  log "Cooldown ${COOLDOWN_SECONDS}s — letting CPU settle after index build"
+  sleep "$COOLDOWN_SECONDS"
 }
 
 run_goose() {
@@ -150,18 +161,20 @@ run_goose() {
     POOL_DATASET=train \
     SEARCH_LIMIT="$k" \
     HNSW_EF="$ef" \
-    CASPER_COLLECTION="$COLLECTION" \
+    CASPER_COLLECTION="$CASPER_COLLECTION" \
     OUTPUT_FORMAT=bin \
     USERS="$USERS" \
     RUN_TIME_SECONDS="$RUN_TIME_SECONDS" \
-      "${NUMA_LOAD[@]}" "$GOOSE_BIN" --host "$BASE_URL" --hatch-rate "$USERS" \
+      "${NUMA_LOAD[@]}" "$GOOSE_BIN" --host "$CASPER_BASE_URL" --hatch-rate "$USERS" \
       2>&1 | tee "$out_file" || true
   done
 }
 
 for quant in f32 i8; do
-  delete_index
-  create_index "$quant"
+  delete_collection
+  create_collection "$quant"
+  import_data "$quant"
+  build_index "$quant"
   run_goose "$quant"
 done
 

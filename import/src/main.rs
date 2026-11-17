@@ -75,7 +75,7 @@ struct Point {
 
 #[derive(Serialize)]
 struct CasperBatch<'a> {
-    insert: &'a [Point],
+    upserts: &'a [Point],
     delete: &'a [u32],
 }
 
@@ -173,7 +173,7 @@ fn open_hdf5(path: &PathBuf, dataset_name: &str) -> Result<(usize, usize, Hdf5Re
 
 fn send_casper(client: &reqwest::blocking::Client, base_url: &str, collection: &str, batch: &[Point]) -> Result<()> {
     let url = format!("{}/collection/{}/update", base_url.trim_end_matches('/'), collection);
-    let body = CasperBatch { insert: batch, delete: &[] };
+    let body = CasperBatch { upserts: batch, delete: &[] };
     let resp = client.post(&url).json(&body).send().with_context(|| format!("POST {url}"))?;
     let status = resp.status();
     if !status.is_success() {

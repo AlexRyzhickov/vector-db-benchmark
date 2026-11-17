@@ -1,5 +1,5 @@
 [package]
-name = "import-rs"
+name = "import"
 version = "0.1.0"
 edition = "2024"
 description = "Rust port of scripts/import — bulk-loads vectors into Casper or Qdrant"
