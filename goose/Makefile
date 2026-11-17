@@ -1,8 +1,7 @@
-PACKAGE := goose-load-test
-BIN := goose-load-test
+PACKAGE := goose
+BIN := goose
 HERE := $(CURDIR)
-CARGO_TARGET_DIR := $(HERE)/target
-TARGET_DIR := $(CARGO_TARGET_DIR)/release
+WORKSPACE := $(abspath $(HERE)/..)
 
 HOST ?= http://localhost:7222
 CASPER_COLLECTION ?= test_collection
@@ -16,14 +15,16 @@ HDF5_POOL_PATH ?= /root/dir/perf/deep-image-96-angular.hdf5
 
 # Qdrant-specific overrides (gRPC endpoint, used by qdrant-client)
 QDRANT_URL         ?= http://localhost:6334
-QDRANT_COLLECTION  ?= deep-image-96-noindex
+QDRANT_COLLECTION  ?= test_collection
 HNSW_EF            ?= 128
 
-.PHONY: build clean run-bin run-hdf5 run-hdf5-qdrant bench-bin bench-hdf5 bench-hdf5-qdrant
+.PHONY: build-linux-x86 clean run-bin run-hdf5 run-hdf5-qdrant bench-bin bench-hdf5 bench-hdf5-qdrant
 
-build:
-	cargo build --manifest-path $(HERE)/Cargo.toml --release --target-dir $(CARGO_TARGET_DIR)
-	cp $(TARGET_DIR)/$(BIN) $(HERE)/$(BIN)
+# Built only for the bench platform, via `cross` (see ../make/dev.mk).
+build-linux-x86: TARGET := x86_64-unknown-linux-gnu
+build-linux-x86:
+	cd $(WORKSPACE) && cross build --release --locked --target $(TARGET) --manifest-path $(HERE)/Cargo.toml
+	cp $(WORKSPACE)/target/$(TARGET)/release/$(BIN) $(HERE)/$(BIN)
 
 clean:
 	rm -f $(HERE)/$(BIN)
@@ -47,7 +48,7 @@ run-hdf5: $(HERE)/$(BIN)
 		$(HERE)/$(BIN) --host $(HOST)
 
 $(HERE)/$(BIN):
-	$(MAKE) build
+	$(MAKE) build-linux-x86
 
 bench-bin: $(HERE)/$(BIN)
 	@first=1; for k in 10 100 1000; do \

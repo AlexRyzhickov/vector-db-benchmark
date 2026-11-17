@@ -1,0 +1,5 @@
+# Pin the toolchain so every build of the benchmark uses the same Rust,
+# regardless of which `stable` a machine happens to have.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
